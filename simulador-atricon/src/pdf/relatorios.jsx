@@ -40,8 +40,8 @@ const styles = StyleSheet.create({
     borderBottomColor: '#1e3a5f',
   },
   logo: {
-    width: 180,
-    marginBottom: 8,
+    width: 90,
+    marginBottom: 6,
   },
   entity: {
     fontSize: 12,

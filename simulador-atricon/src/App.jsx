@@ -3,6 +3,8 @@ import { signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, on
 import { doc, setDoc, getDoc } from "firebase/firestore"; 
 import { auth, db } from './firebase'; 
 import * as pdfjsLib from 'pdfjs-dist';
+import { RelatorioEntidadeDocument, RelatorioAgrupadoDocument } from './pdf/relatorios';
+import { baixarPdf, nomeArquivoPdf } from './pdf/baixarPdf';
 import './index.css';
 
 // Configuração segura do Worker do PDF.js para React/Vite
@@ -468,6 +470,13 @@ function verificaSeAtende(item, marcados) {
     return "parcial";
 }
 
+function rotuloClassificacao(tipo) {
+    if (tipo === 'essencial') return 'Essencial';
+    if (tipo === 'obrigatoria') return 'Obrigatória';
+    if (tipo === 'recomendada') return 'Recomendada';
+    return tipo;
+}
+
 function App() {
 
   const [usuarioLogado, setUsuarioLogado] = useState(false);
@@ -497,6 +506,7 @@ function App() {
   const [processandoPDF, setProcessandoPDF] = useState(false);
   const [animacaoSaidaIA, setAnimacaoSaidaIA] = useState(false);
   const [textoProcessamento, setTextoProcessamento] = useState("Iniciando leitura...");
+  const [gerandoPdf, setGerandoPdf] = useState(false);
 
   // Novos Estados do Relatório Gerencial (Filtros Combinados)
   const [relOperador, setRelOperador] = useState('todos');
@@ -1036,19 +1046,26 @@ function App() {
       setMenuAberto(false);
   };
 
-  const gerarRelatorioGerencialPDF = () => {
+  const gerarRelatorioGerencialPDF = async () => {
       const dados = getDadosFiltradosAgrupamento();
       setDadosRelatorioAgrupado(dados);
       setMenuAberto(false);
-      
-      setTimeout(() => {
-          setTelaAtiva('relatorio_agrupado');
-          window.scrollTo(0,0);
-          
-          setTimeout(() => { 
-              window.print(); 
-          }, 500);
-      }, 400);
+      setGerandoPdf(true);
+      try {
+          await baixarPdf(
+              <RelatorioAgrupadoDocument
+                  entidades={dados}
+                  filtrosTexto={getFiltrosAplicadosTexto()}
+                  emitidoEm={new Date().toLocaleString('pt-BR')}
+              />,
+              nomeArquivoPdf('relatorio_agrupado', 'pntp')
+          );
+      } catch (e) {
+          console.error(e);
+          exibirModal("Erro", "Não foi possível gerar o PDF. Tente novamente.", "erro");
+      } finally {
+          setGerandoPdf(false);
+      }
   };
 
   const baixarModeloCSV = () => {
@@ -1236,6 +1253,30 @@ function App() {
       return pontosTotaisGrupo > 0 ? ((pontosObtidosGrupo / pontosTotaisGrupo) * 100).toFixed(1) : 0;
   };
 
+  const montarGruposPdf = (entidade, filtro) => {
+      const ehCamara = normalizarTexto(entidade.nome).includes('camara');
+      return GRUPOS_CRITERIOS.map((grupo) => {
+          const num = parseInt(grupo.titulo);
+          if (ehCamara && [16, 17, 18, 19].includes(num)) return null;
+          if (!ehCamara && num === 20) return null;
+
+          const itens = grupo.itens.map((item) => {
+              const status = verificaSeAtende(item, entidade.marcados);
+              if (filtro === 'atendendo' && status !== 'atende') return null;
+              if (filtro === 'nao_atendendo' && status === 'atende') return null;
+              return {
+                  id: item.id,
+                  nome: item.nome,
+                  tipo: rotuloClassificacao(item.classificacao),
+                  status,
+              };
+          }).filter(Boolean);
+
+          if (itens.length === 0) return null;
+          return { titulo: grupo.titulo, perc: calcularPercGrupo(grupo, entidade), itens };
+      }).filter(Boolean);
+  };
+
   const handleToggleCheck = (idItem, tipo) => {
       setBancoDeDados(prevDb => {
           let newDb = JSON.parse(JSON.stringify(prevDb));
@@ -1292,8 +1333,32 @@ function App() {
   const totalNoBanco = Object.keys(bancoDeDados).length;
   const entidadesAvaliadas = Object.values(bancoDeDados).filter(e => e.perc > 0).length;
 
-  const imprimirPDF = () => {
-      setTimeout(() => { window.print(); }, 400);
+  const imprimirPDF = async () => {
+      const ent = bancoDeDados[entidadeEditando];
+      if (!ent) return;
+      setGerandoPdf(true);
+      try {
+          const filtroLabel = filtroRelatorio === 'todos'
+              ? 'Todos os critérios'
+              : filtroRelatorio === 'atendendo'
+                  ? 'Somente atendidos'
+                  : 'Somente pendências';
+          await baixarPdf(
+              <RelatorioEntidadeDocument
+                  entidade={ent}
+                  estatisticas={obterEstatisticas(ent)}
+                  grupos={montarGruposPdf(ent, filtroRelatorio)}
+                  filtroLabel={filtroLabel}
+                  emitidoEm={new Date().toLocaleString('pt-BR')}
+              />,
+              nomeArquivoPdf('simulacao', ent.nome)
+          );
+      } catch (e) {
+          console.error(e);
+          exibirModal("Erro", "Não foi possível gerar o PDF. Tente novamente.", "erro");
+      } finally {
+          setGerandoPdf(false);
+      }
   };
 
   const finalizarAvaliacao = async () => {
@@ -1377,7 +1442,7 @@ function App() {
                       </div>
 
                       <div className="text-center mt-4 text-muted" style={{ fontSize: '0.75rem' }}>
-                          © 2026 TD2 - Simulador de Transparência
+                          © 2026 Group Gestor - Simulador de Transparência
                       </div>
                   </div>
               </div>
@@ -1436,6 +1501,19 @@ function App() {
                   <div className="progress mt-4 rounded-pill mx-auto" style={{ width: '100%', height: '6px', backgroundColor: 'rgba(255,255,255,0.1)' }}>
                       <div className="progress-bar progress-bar-striped progress-bar-animated bg-info rounded-pill" style={{ width: '100%' }}></div>
                   </div>
+              </div>
+          </div>
+      )}
+
+      {gerandoPdf && (
+          <div
+              className="d-flex align-items-center justify-content-center position-fixed w-100 h-100"
+              style={{ top: 0, left: 0, zIndex: 10000, backgroundColor: 'rgba(0, 0, 0, 0.45)' }}
+          >
+              <div className="card border-0 shadow-lg text-center p-4" style={{ width: '90%', maxWidth: '360px', borderRadius: '16px' }}>
+                  <div className="spinner-border text-danger mx-auto mb-3" role="status" />
+                  <h6 className="fw-bold mb-1">Gerando PDF</h6>
+                  <p className="text-muted small mb-0">O arquivo será baixado em instantes.</p>
               </div>
           </div>
       )}
@@ -1970,8 +2048,8 @@ function App() {
               <button onClick={() => { setTelaAtiva('lista'); window.scrollTo(0,0); }} className="btn btn-light border shadow-sm fw-bold btn-hover-destaque">
                 <i className="bi bi-arrow-left me-2"></i> Voltar para o Painel
               </button>
-              <button onClick={() => window.print()} className="btn btn-danger shadow-sm fw-bold">
-                <i className="bi bi-printer-fill me-2"></i> Imprimir Relatório
+              <button onClick={gerarRelatorioGerencialPDF} className="btn btn-danger shadow-sm fw-bold" disabled={gerandoPdf}>
+                <i className="bi bi-file-earmark-pdf-fill me-2"></i> {gerandoPdf ? 'Gerando...' : 'Baixar PDF'}
               </button>
             </div>
 
@@ -2020,7 +2098,7 @@ function App() {
 
                 <div className="mt-5 pt-3 text-center" style={{ pageBreakInside: 'avoid' }}>
                     <p className="text-muted small mb-0">
-                        Gerado automaticamente pelo <b>Simulador de Avaliação Atricon 2026 - TD2</b>
+                        Gerado automaticamente pelo <b>Simulador de Avaliação Atricon 2026 - Group Gestor</b>
                     </p>
                     <p className="text-muted small d-none d-print-block">
                         Data de emissão: {new Date().toLocaleDateString('pt-BR')} às {new Date().toLocaleTimeString('pt-BR')}
@@ -2036,185 +2114,10 @@ function App() {
         {telaAtiva !== 'relatorio_agrupado' && (
           <footer className="mt-4 text-center text-muted small border-top pt-3 mb-2">
             <span><b>{entidadesAvaliadas}</b> avaliadas de {totalNoBanco} entidades</span> <br/>
-            <span>© 2026 TD2 - Simulador de Transparência Atricon</span>
+            <span>© 2026 Group Gestor - Simulador de Transparência Atricon</span>
           </footer>
         )}
       </main>
-
-      {/* ===================================================================
-          A MÁGICA: LAYOUTS EXCLUSIVOS PARA O PDF (FORA DA MAIN)
-          =================================================================== */}
-      
-      <div className="d-none d-print-block w-100 bg-white text-dark">
-        
-        {/* IMPRESSÃO: PDF DA ENTIDADE INDIVIDUAL */}
-        {telaAtiva === 'avaliacao' && entidadeEditando && (
-            <div>
-                <div className="text-center mb-4" style={{ borderBottom: '2px solid #000', paddingBottom: '10px' }}>
-                    {bancoDeDados[entidadeEditando].logo && (
-                        <img src={bancoDeDados[entidadeEditando].logo} alt="Logo" style={{ maxHeight: '100px', marginBottom: '15px' }} />
-                    )}
-                    <h3 className="fw-bold m-0 text-dark">{bancoDeDados[entidadeEditando].nome}</h3>
-                    <h5 className="text-secondary">Relatório de Simulação - PNTP Atricon</h5>
-                    <div className="mt-3 d-flex justify-content-around text-dark">
-                        <span><b>Data:</b> {new Date().toLocaleDateString('pt-BR')}</span>
-                        <span><b>Controlador:</b> {bancoDeDados[entidadeEditando].controlador || 'Não informado'}</span>
-                    </div>
-                </div>
-
-                <div className="mb-4 p-3 bg-light rounded text-center" style={{ border: '1px solid #ccc' }}>
-                    <h5 className="m-0 text-dark">
-                        Selo Projetado: <b>{bancoDeDados[entidadeEditando].selo}</b> <br/>
-                        Aderência aos Critérios: <b>{bancoDeDados[entidadeEditando].perc}%</b>
-                    </h5>
-                    
-                    {/* TERMÔMETROS IMPRESSÃO PDF */}
-                    {estatisticasAtual && (
-                        <div className="d-flex justify-content-center gap-4 mt-3" style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}>
-                            <div style={{ width: '30%' }}>
-                                <span className="small fw-bold text-dark" style={{fontSize: '11px'}}>Essencial ({estatisticasAtual.percEssencial}%)</span>
-                                <div style={{ border: '1px solid #adb5bd', borderRadius: '4px', height: '14px', width: '100%', backgroundColor: '#e9ecef', marginTop: '2px' }}>
-                                    <div style={{ backgroundColor: '#dc3545', height: '100%', width: `${estatisticasAtual.percEssencial}%`, borderRadius: '3px' }}></div>
-                                </div>
-                            </div>
-                            <div style={{ width: '30%' }}>
-                                <span className="small fw-bold text-dark" style={{fontSize: '11px'}}>Obrigatória ({estatisticasAtual.percObrigatoria}%)</span>
-                                <div style={{ border: '1px solid #adb5bd', borderRadius: '4px', height: '14px', width: '100%', backgroundColor: '#e9ecef', marginTop: '2px' }}>
-                                    <div style={{ backgroundColor: '#ffc107', height: '100%', width: `${estatisticasAtual.percObrigatoria}%`, borderRadius: '3px' }}></div>
-                                </div>
-                            </div>
-                            <div style={{ width: '30%' }}>
-                                <span className="small fw-bold text-dark" style={{fontSize: '11px'}}>Recomendada ({estatisticasAtual.percRecomendada}%)</span>
-                                <div style={{ border: '1px solid #adb5bd', borderRadius: '4px', height: '14px', width: '100%', backgroundColor: '#e9ecef', marginTop: '2px' }}>
-                                    <div style={{ backgroundColor: '#0dcaf0', height: '100%', width: `${estatisticasAtual.percRecomendada}%`, borderRadius: '3px' }}></div>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-
-                    <p className="mt-3 mb-0 small text-danger fw-bold">
-                        * Nota de Simulação: Simulação com motor de cálculo de alta precisão. Variações mínimas (até ±0,5%) podem ocorrer por arredondamentos do sistema oficial.
-                    </p>
-                </div>
-
-                <h5 className="fw-bold mb-3 text-dark text-center">Critérios Avaliados ({filtroRelatorio === 'todos' ? 'Todos' : filtroRelatorio === 'atendendo' ? 'Atendidos' : 'Pendentes'})</h5>
-
-                {GRUPOS_CRITERIOS.map((grupo, idx) => {
-                    const ehCamara = normalizarTexto(bancoDeDados[entidadeEditando].nome).includes('camara');
-                    const num = parseInt(grupo.titulo);
-                    if (ehCamara && [16, 17, 18, 19].includes(num)) return null;
-                    if (!ehCamara && num === 20) return null;
-
-                    const itensFiltrados = grupo.itens.filter(item => {
-                        const statusStr = verificaSeAtende(item, bancoDeDados[entidadeEditando].marcados);
-                        if (filtroRelatorio === 'atendendo') return statusStr === 'atende';
-                        if (filtroRelatorio === 'nao_atendendo') return statusStr === 'nao_atende' || statusStr === 'parcial';
-                        return true;
-                    });
-
-                    if (itensFiltrados.length === 0) return null;
-
-                    const percGrupo = calcularPercGrupo(grupo, bancoDeDados[entidadeEditando]);
-
-                    return (
-                        <div key={idx} className="print-avoid-break mb-4">
-                            <div className="p-2 fw-bold text-white bg-dark mb-2 d-flex justify-content-between align-items-center" style={{ backgroundColor: '#000 !important', WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}>
-                                <span>{grupo.titulo}</span>
-                                <span className="badge bg-light text-dark">{percGrupo}%</span>
-                            </div>
-                            <table className="table table-sm table-bordered" style={{ tableLayout: 'fixed', width: '100%', wordWrap: 'break-word' }}>
-                                <thead>
-                                    <tr className="bg-light">
-                                        <th style={{ width: '10%' }} className="text-dark text-center align-middle">ID</th>
-                                        <th style={{ width: '60%' }} className="text-dark text-start align-middle">Critério</th>
-                                        <th style={{ width: '15%' }} className="text-dark text-center align-middle">Tipo</th>
-                                        <th style={{ width: '15%' }} className="text-center text-dark align-middle">Status</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {itensFiltrados.map(item => {
-                                        const statusStr = verificaSeAtende(item, bancoDeDados[entidadeEditando].marcados);
-                                        let cor = 'red';
-                                        let texto = 'Não Atende ✗';
-                                        if (statusStr === 'atende') { cor = 'green'; texto = 'Atende ✓'; }
-                                        else if (statusStr === 'parcial') { cor = '#d39e00'; texto = 'Parcial ⚠'; }
-
-                                        return (
-                                            <tr key={item.id}>
-                                                <td className="text-dark text-center align-middle"><b>{item.id}</b></td>
-                                                <td className="text-dark align-middle">{item.nome}</td>
-                                                <td className="text-capitalize text-dark text-center align-middle">{item.classificacao}</td>
-                                                <td className="text-center fw-bold align-middle" style={{ color: cor }}>
-                                                    {texto}
-                                                </td>
-                                            </tr>
-                                        );
-                                    })}
-                                </tbody>
-                            </table>
-                        </div>
-                    );
-                })}
-
-                <div className="mt-5 pt-5 text-center text-dark" style={{ pageBreakInside: 'avoid' }}>
-                    <div className="d-flex justify-content-center mb-2">
-                        <div style={{ width: '250px', borderTop: '1px solid #000' }}></div>
-                    </div>
-                    <p className="fw-bold mb-4">{bancoDeDados[entidadeEditando].operador} (Operador Responsável)</p>
-                    <p className="text-secondary small mb-0">Gerado pelo <b>Simulador de Avaliação Atricon 2026 - TD2</b></p>
-                    <p className="text-secondary small">Data de emissão: {new Date().toLocaleDateString('pt-BR')} às {new Date().toLocaleTimeString('pt-BR')}</p>
-                </div>
-            </div>
-        )}
-
-        {/* IMPRESSÃO: PDF DO RELATÓRIO AGRUPADO */}
-        {telaAtiva === 'relatorio_agrupado' && (
-            <div>
-                <div className="text-center mb-4 border-bottom pb-3">
-                    <h3 className="fw-bold m-0 text-dark">Relatório de Agrupamento - PNTP Atricon</h3>
-                    <div className="mt-3 d-flex justify-content-around text-dark">
-                        <span><b>Data:</b> {new Date().toLocaleDateString('pt-BR')}</span>
-                        <span><b>Filtros Aplicados:</b> {getFiltrosAplicadosTexto()}</span>
-                    </div>
-                </div>
-
-                <table className="table table-bordered align-middle text-center" style={{ fontSize: '0.85rem', tableLayout: 'fixed', width: '100%', wordWrap: 'break-word' }}>
-                    <thead className="table-light">
-                        <tr>
-                        <th style={{ width: '50%' }} className="text-start text-dark py-3">Entidade</th>
-                        <th style={{ width: '20%' }} className="text-dark py-3">Operador</th>
-                        <th style={{ width: '15%' }} className="text-dark py-3">Selo Projetado</th>
-                        <th style={{ width: '15%' }} className="text-dark py-3">Nota (%)</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {dadosRelatorioAgrupado.map(ent => (
-                        <tr key={ent.id}>
-                            <td className="text-start fw-bold text-dark py-3">{ent.nome}</td>
-                            <td className="text-dark py-3">{ent.operador}</td>
-                            <td className="text-dark fw-bold py-3">{ent.selo}</td>
-                            <td className="fw-bold text-dark py-3">{ent.perc}%</td>
-                        </tr>
-                        ))}
-                        {dadosRelatorioAgrupado.length === 0 && (
-                        <tr>
-                            <td colSpan="4" className="text-center py-4 text-muted">Nenhum registro encontrado.</td>
-                        </tr>
-                        )}
-                    </tbody>
-                </table>
-
-                <div className="mt-5 text-center text-dark" style={{ pageBreakInside: 'avoid' }}>
-                    <p className="text-secondary small mb-0">
-                        Gerado pelo <b>Simulador de Avaliação Atricon 2026 - TD2</b>
-                    </p>
-                    <p className="text-secondary small">
-                        Data de emissão: {new Date().toLocaleDateString('pt-BR')} às {new Date().toLocaleTimeString('pt-BR')}
-                    </p>
-                </div>
-            </div>
-        )}
-      </div>
 
       {/* ===================================================================
           MODAIS DO SISTEMA (ESCONDIDOS NA IMPRESSÃO)
@@ -2341,7 +2244,7 @@ function App() {
             </div>
             <div className="modal-body p-4">
               <div className="alert alert-info border-0 small mb-4">
-                <i className="bi bi-info-circle-fill me-2"></i> O PDF será gerado nativamente pelo seu navegador. A logo oficial da entidade será incluída automaticamente se estiver cadastrada.
+                <i className="bi bi-info-circle-fill me-2"></i> O PDF é gerado pelo sistema e baixado no computador. A logo da entidade aparece centralizada no topo, se estiver cadastrada.
               </div>
               
               <div className="mb-4">
@@ -2355,7 +2258,9 @@ function App() {
             </div>
             <div className="modal-footer border-0 pt-0">
               <button type="button" className="btn btn-light shadow-sm" data-bs-dismiss="modal">Cancelar</button>
-              <button type="button" className="btn btn-danger shadow-sm fw-bold" data-bs-dismiss="modal" onClick={imprimirPDF}>Gerar / Imprimir</button>
+              <button type="button" className="btn btn-danger shadow-sm fw-bold" data-bs-dismiss="modal" onClick={imprimirPDF} disabled={gerandoPdf}>
+                {gerandoPdf ? 'Gerando...' : 'Baixar PDF'}
+              </button>
             </div>
           </div>
         </div>

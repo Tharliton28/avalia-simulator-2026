@@ -75,7 +75,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     borderWidth: 1,
     borderColor: '#d5dbe3',
-    marginBottom: 10,
+    marginBottom: 16,
   },
   kpi: {
     flex: 1,
@@ -102,17 +102,18 @@ const styles = StyleSheet.create({
     color: '#1e3a5f',
   },
   disclaimer: {
-    fontSize: 7,
-    color: '#64748b',
-    marginTop: 2,
-    marginBottom: 14,
+    fontSize: 8,
+    fontFamily: 'Helvetica-Bold',
+    color: '#000000',
+    marginTop: 4,
+    marginBottom: 22,
     textAlign: 'center',
   },
   table: {
     marginBottom: 0,
   },
   groupGap: {
-    height: 10,
+    height: 16,
   },
   tableHead: {
     borderWidth: 1,

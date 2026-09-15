@@ -4,7 +4,7 @@ import { doc, setDoc, getDoc } from "firebase/firestore";
 import { auth, db } from './firebase'; 
 import * as pdfjsLib from 'pdfjs-dist';
 import { RelatorioEntidadeDocument, RelatorioAgrupadoDocument } from './pdf/relatorios';
-import { baixarPdf, nomeArquivoPdf } from './pdf/baixarPdf';
+import { baixarPdf, visualizarPdf, nomeArquivoPdf } from './pdf/baixarPdf';
 import './index.css';
 
 // Configuração segura do Worker do PDF.js para React/Vite
@@ -1333,29 +1333,54 @@ function App() {
   const totalNoBanco = Object.keys(bancoDeDados).length;
   const entidadesAvaliadas = Object.values(bancoDeDados).filter(e => e.perc > 0).length;
 
-  const imprimirPDF = async () => {
+  const montarDocumentoEntidade = () => {
       const ent = bancoDeDados[entidadeEditando];
-      if (!ent) return;
-      setGerandoPdf(true);
-      try {
-          const filtroLabel = filtroRelatorio === 'todos'
-              ? 'Todos os critérios'
-              : filtroRelatorio === 'atendendo'
-                  ? 'Somente atendidos'
-                  : 'Somente pendências';
-          await baixarPdf(
+      if (!ent) return null;
+      const filtroLabel = filtroRelatorio === 'todos'
+          ? 'Todos os critérios'
+          : filtroRelatorio === 'atendendo'
+              ? 'Somente atendidos'
+              : 'Somente pendências';
+      return {
+          documento: (
               <RelatorioEntidadeDocument
                   entidade={ent}
                   estatisticas={obterEstatisticas(ent)}
                   grupos={montarGruposPdf(ent, filtroRelatorio)}
                   filtroLabel={filtroLabel}
                   emitidoEm={new Date().toLocaleString('pt-BR')}
-              />,
-              nomeArquivoPdf('simulacao', ent.nome)
-          );
+              />
+          ),
+          nomeArquivo: nomeArquivoPdf('simulacao', ent.nome),
+      };
+  };
+
+  const baixarRelatorioEntidade = async () => {
+      const relatorio = montarDocumentoEntidade();
+      if (!relatorio) return;
+      setGerandoPdf(true);
+      try {
+          await baixarPdf(relatorio.documento, relatorio.nomeArquivo);
       } catch (e) {
           console.error(e);
           exibirModal("Erro", "Não foi possível gerar o PDF. Tente novamente.", "erro");
+      } finally {
+          setGerandoPdf(false);
+      }
+  };
+
+  const visualizarRelatorioEntidade = async () => {
+      const relatorio = montarDocumentoEntidade();
+      if (!relatorio) return;
+      setGerandoPdf(true);
+      try {
+          await visualizarPdf(relatorio.documento);
+      } catch (e) {
+          console.error(e);
+          const mensagem = e?.message === 'popup_blocked'
+              ? 'O navegador bloqueou a abertura do PDF. Permita pop-ups para este site e tente novamente.'
+              : 'Não foi possível abrir o PDF. Tente novamente.';
+          exibirModal("Erro", mensagem, "erro");
       } finally {
           setGerandoPdf(false);
       }
@@ -2244,7 +2269,7 @@ function App() {
             </div>
             <div className="modal-body p-4">
               <div className="alert alert-info border-0 small mb-4">
-                <i className="bi bi-info-circle-fill me-2"></i> O PDF é gerado pelo sistema e baixado no computador. A logo da entidade aparece centralizada no topo, se estiver cadastrada.
+                <i className="bi bi-info-circle-fill me-2"></i> O PDF é gerado pelo sistema. Use <strong>Visualizar / Imprimir</strong> para abrir em nova aba e conferir antes de salvar. A logo da entidade aparece centralizada no topo, se estiver cadastrada.
               </div>
               
               <div className="mb-4">
@@ -2256,11 +2281,16 @@ function App() {
                 </select>
               </div>
             </div>
-            <div className="modal-footer border-0 pt-0">
+            <div className="modal-footer border-0 pt-0 d-flex flex-wrap justify-content-between gap-2">
               <button type="button" className="btn btn-light shadow-sm" data-bs-dismiss="modal">Cancelar</button>
-              <button type="button" className="btn btn-danger shadow-sm fw-bold" data-bs-dismiss="modal" onClick={imprimirPDF} disabled={gerandoPdf}>
-                {gerandoPdf ? 'Gerando...' : 'Baixar PDF'}
-              </button>
+              <div className="d-flex flex-wrap gap-2">
+                <button type="button" className="btn btn-outline-danger shadow-sm fw-bold" data-bs-dismiss="modal" onClick={visualizarRelatorioEntidade} disabled={gerandoPdf}>
+                  <i className="bi bi-printer me-1"></i> {gerandoPdf ? 'Gerando...' : 'Visualizar / Imprimir'}
+                </button>
+                <button type="button" className="btn btn-danger shadow-sm fw-bold" data-bs-dismiss="modal" onClick={baixarRelatorioEntidade} disabled={gerandoPdf}>
+                  <i className="bi bi-download me-1"></i> {gerandoPdf ? 'Gerando...' : 'Baixar PDF'}
+                </button>
+              </div>
             </div>
           </div>
         </div>

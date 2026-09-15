@@ -19,8 +19,8 @@ const TIPO_CORES = {
 
 const KPI_CORES = {
   Essencial: '#dc3545',
-  Obrigatória: '#ffc107',
-  Recomendada: '#0dcaf0',
+  Obrigatória: '#9a6700',
+  Recomendada: '#087990',
 };
 
 const styles = StyleSheet.create({
@@ -40,10 +40,8 @@ const styles = StyleSheet.create({
     borderBottomColor: '#1e3a5f',
   },
   logo: {
-    width: 44,
-    height: 44,
-    objectFit: 'contain',
-    marginBottom: 4,
+    width: 180,
+    marginBottom: 8,
   },
   entity: {
     fontSize: 12,

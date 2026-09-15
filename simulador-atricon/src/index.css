@@ -198,10 +198,37 @@ body {
 }
 
 .grupo-header { 
-    background-color: #2b3035; 
-    color: #fff !important; 
+    background-color: var(--bg-card); 
+    color: var(--text-principal); 
     padding: 12px; 
-    border-radius: 8px 8px 0 0; 
+    border-radius: 10px; 
+    border: 1px solid var(--border-cor);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
+}
+
+.grupo-header-title,
+.grupo-header-dim {
+    color: var(--text-principal) !important;
+}
+
+.grupo-header .progress {
+    background-color: var(--border-cor) !important;
+}
+
+.grupo-header .badge-perc {
+    background: rgba(13, 110, 253, 0.12);
+    color: #0d6efd;
+    border: none;
+    font-weight: 700;
+}
+
+[data-bs-theme="dark"] .grupo-header {
+    box-shadow: none;
+}
+
+[data-bs-theme="dark"] .grupo-header .badge-perc {
+    background: rgba(13, 110, 253, 0.22);
+    color: #74b0ff;
 }
 
 .col-validacao { width: 40px; text-align: center; }

@@ -1968,12 +1968,12 @@ function App() {
                           <div className="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center">
                               
                               <div style={{ cursor: 'pointer', userSelect: 'none', flexGrow: 1 }} data-bs-toggle="collapse" data-bs-target={`#${collapseId}`} className="mb-3 mb-lg-0 pe-lg-3">
-                                  <div className="text-white fw-bold d-flex align-items-center">
+                                  <div className="grupo-header-title fw-bold d-flex align-items-center">
                                       <i className="bi bi-caret-down-fill me-2 opacity-75"></i> 
                                       {grupo.titulo}
-                                      <span className="badge bg-light text-dark ms-3 border border-secondary">{percGrupo}%</span>
+                                      <span className="badge badge-perc ms-3">{percGrupo}%</span>
                                   </div>
-                                  <div className="progress mt-2" style={{ height: '6px', backgroundColor: 'rgba(255,255,255,0.2)', maxWidth: '400px' }}>
+                                  <div className="progress mt-2" style={{ height: '6px', maxWidth: '400px' }}>
                                       <div className="progress-bar bg-warning" style={{ width: `${percGrupo}%` }}></div>
                                   </div>
                               </div>
@@ -1984,11 +1984,11 @@ function App() {
                                       <button onClick={() => handleMarcarGrupo(grupo.titulo, false)} className="btn btn-sm btn-secondary px-2 py-1 shadow-sm" style={{ fontSize: '0.75rem' }}>Desmarcar</button>
                                   </div>
                                   <div className="d-flex" style={{ width: '200px', flexShrink: 0 }}>
-                                      <div style={{ width: '40px', textAlign: 'center' }} className="fw-bold text-white">D</div>
-                                      <div style={{ width: '40px', textAlign: 'center' }} className="fw-bold text-white">A</div>
-                                      <div style={{ width: '40px', textAlign: 'center' }} className="fw-bold text-white">S</div>
-                                      <div style={{ width: '40px', textAlign: 'center' }} className="fw-bold text-white">G</div>
-                                      <div style={{ width: '40px', textAlign: 'center' }} className="fw-bold text-white">F</div>
+                                      <div style={{ width: '40px', textAlign: 'center' }} className="fw-bold grupo-header-dim">D</div>
+                                      <div style={{ width: '40px', textAlign: 'center' }} className="fw-bold grupo-header-dim">A</div>
+                                      <div style={{ width: '40px', textAlign: 'center' }} className="fw-bold grupo-header-dim">S</div>
+                                      <div style={{ width: '40px', textAlign: 'center' }} className="fw-bold grupo-header-dim">G</div>
+                                      <div style={{ width: '40px', textAlign: 'center' }} className="fw-bold grupo-header-dim">F</div>
                                   </div>
                               </div>
                           </div>
